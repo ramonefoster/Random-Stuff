@@ -1,0 +1,49 @@
+{
+    "objects": 
+    [{
+        "name": "Sirius",
+        "rightAscension": "06 45 08.91",
+        "declination": "-16 42 58.0",
+        "filters": ["U", "B", "V"],
+        "numberImages": 9,
+        "exposure": [2, 2, 2],
+        "priority": 1
+    },
+    {
+        "name": "Antares",
+        "rightAscension": "16 29 24.45",
+        "declination": "-26 25 55",
+        "filters": ["Clear"],
+        "numberImages": 13,
+        "exposure": 2,
+        "priority": 1
+    },
+    {
+        "name": "Vega",
+        "rightAscension": "18 36 56.3",
+        "declination": "+38 47 01",
+        "filters": ["Clear"],
+        "numberImages": 7,
+        "exposure": 2,
+        "priority": 2
+    },
+    {
+        "name": "HR5723",
+        "rightAscension": "15 24 11.8",
+        "declination": "-10 19 20",
+        "filters": ["Clear"],
+        "numberImages": 8,
+        "exposure": 2,
+        "priority": 2
+    },
+    {
+        "name": "HR2598",
+        "rightAscension": "06 55 54.7",
+        "declination": "-31 47 24.6",
+        "filters": ["U", "B", "V"],
+        "numberImages": 5,
+        "exposure": [3, 3, 3],
+        "priority": 2
+    }
+    ]
+}
