@@ -26,6 +26,31 @@ RNA_MODEL_PATH = 'data/rf_model.keras'
 RAD2DEG = 180 / math.pi
 DEG2RAD = math.pi / 180.0
 
+
+def add_noise(df, noise_level=0.01):
+    noisy_df = df.copy()
+    for col in df.columns:
+        if df[col].dtype in [np.float64, np.int64]:  # Only add noise to numerical columns
+            noise = np.random.normal(0, noise_level, df[col].shape)
+            noisy_df[col] += noise
+    return noisy_df
+
+def scale_features(df, scale_factor=0.05):
+    scaled_df = df.copy()
+    for col in df.columns:
+        if df[col].dtype in [np.float64, np.int64]:  # Only scale numerical columns
+            scale = np.random.uniform(1 - scale_factor, 1 + scale_factor)
+            scaled_df[col] *= scale
+    return scaled_df
+
+def shift_features(df, shift_factor=0.01):
+    shifted_df = df.copy()
+    for col in df.columns:
+        if df[col].dtype in [np.float64, np.int64]:  # Only shift numerical columns
+            shift = np.random.uniform(-shift_factor, shift_factor)
+            shifted_df[col] += shift
+    return shifted_df
+
 def check_format(input):
     """
     Check the format of a given input and extract components.
@@ -224,14 +249,14 @@ class CSVHandler():
         dataframe = pd.read_csv(RNA_CSV_PATH)
 
         X = dataframe.loc[:, ["azimuth", "elevation", "ah_star", "dec_star", "prev_ha", "prev_dec"]]
+        Y = dataframe[["err_ah", "err_dec"]]
 
         # Create new columns using .loc to avoid the SettingWithCopyWarning
         X.loc[:, "dist_ha"] = X["ah_star"] - X["prev_ha"]
         X.loc[:, "dist_dec"] = X["dec_star"] - X["prev_dec"]
+        
         X.loc[:, "pier_side"] = X["ah_star"] > 0
-        # X = dataframe[["azimuth", "elevation", "ah_star", "dec_star", "temperature"]]
 
-        Y = dataframe[["err_ah", "err_dec"]]
 
         return X, Y
 
@@ -302,8 +327,7 @@ class RandomForest():
             float: The training score rounded to 2 decimal places.
 
         """       
-        X, Y = CSVHandler.read_data()
-        
+        X, Y = CSVHandler.read_data()      
 
         X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
@@ -328,13 +352,13 @@ class RandomForest():
 
         #BEST
         model = keras.Sequential()
-        model.add(layers.Dense(256, activation='relu', input_dim=X_train.shape[1]))
+        model.add(keras.Input(shape=(X_train.shape[1],)))
+        model.add(layers.Dense(256, activation='tanh'))
         model.add(layers.Dropout(0.2))
-        model.add(layers.Dense(42, activation='relu'))
-        model.add(layers.Dense(7, activation='relu'))
+        model.add(layers.Dense(7, activation='tanh'))
         model.add(layers.Dense(2)) 
         # Compile the model
-        model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error')
+        model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['acc', 'mse'])
         
         model.save(RNA_MODEL_PATH)
 
@@ -342,10 +366,10 @@ class RandomForest():
         checkpoint_callback = keras.callbacks.ModelCheckpoint(RNA_MODEL_PATH, save_best_only=True)
         early_stopping_callback = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
 
-        epochs = 150
-        batch = 8
-        keras_model = KerasRegressor(build_fn=model, epochs=epochs, batch_size=batch)
-        scores = cross_val_score(keras_model, X_train_scaled, Y_train_scaled, cv=5)
+        epochs = 300
+        batch = 50
+        # keras_model = KerasRegressor(build_fn=model, epochs=epochs, batch_size=batch)
+        # scores = cross_val_score(model, X_train_scaled, Y_train_scaled, cv=5)
 
         # Train the model
         history = model.fit(X_train_scaled, Y_train_scaled, 
@@ -355,6 +379,7 @@ class RandomForest():
         # Calculate and return the training score
         train_loss = model.evaluate(X_train_scaled, Y_train_scaled, verbose=0)
         test_loss = model.evaluate(X_test_scaled, Y_test_scaled, verbose=0)
+        loss1, acc1, mse1 = model.evaluate(X_test, Y_test)
 
         Y_pred = model.predict(X_test_scaled)
         mae = mean_absolute_error(Y_test_scaled, Y_pred)
@@ -366,8 +391,8 @@ class RandomForest():
             "MAE": mae,
             "MSE": mse,
             "R2": r2,
-            "Cross": scores,
-            "MeanCross": np.mean(scores)
+            "Cross": 0,
+            "MeanCross": np.mean(0)
             }
 
         print(result)
@@ -378,8 +403,16 @@ class RandomForest():
         plt.ylabel('Loss')
         plt.legend()
         plt.show()
-        print(round(train_loss, 2))
-        return round(train_loss, 2)
+
+        plt.plot(history.history['acc'], label = 'acc')
+        plt.plot(history.history['val_acc'], label='val acc')
+        plt.title("acc vs Val_acc")
+        plt.xlabel("Epochs")
+        plt.ylabel("acc")
+        plt.legend()
+        plt.show()
+
+        return round(loss1, 2)
     
     @staticmethod
     def make_predict(ha=None, dec=None, temp=None, latitude=None, prev_ha=None, prev_dec=None):
@@ -406,9 +439,11 @@ class RandomForest():
         scaler_Y = scalers['scaler_Y']
 
         az, elevation = get_elevation_azimuth(ha, dec, latitude)
+
         dist_ha = ha - prev_ha
         dist_dec = dec - prev_dec
         pier_side = ha > 0
+      
 
         X_futuro = np.array([[az, elevation, ha, dec, prev_ha, prev_dec, dist_ha, dist_dec, pier_side]])
         X_futuro_scaled = scaler_X.transform(X_futuro)
@@ -427,5 +462,9 @@ class RandomForest():
           
 
 # RandomForest.train()
-RandomForest.make_predict(ha=hms_to_hours("03:44:30.00"), dec=dms_to_degrees("-52:29:26.60"), temp=18, 
-                          latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("-03:02:43.00"), prev_dec=dms_to_degrees("-16:42:04.77"))
+RandomForest.make_predict(ha=hms_to_hours("02 58 30"), dec=dms_to_degrees("-26 51 41"), temp=18, 
+                          latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("02:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
+
+
+# "03:49:18.41"
+# "-40:13:25.87"
