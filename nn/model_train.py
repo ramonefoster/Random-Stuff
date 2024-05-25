@@ -5,9 +5,10 @@ import math
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, PolynomialFeatures
 from scikeras.wrappers import KerasRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.feature_selection import SelectKBest, f_regression
 
 import keras
 from keras import layers
@@ -235,21 +236,48 @@ class CSVHandler():
 
         X = dataframe.loc[:, ["azimuth", "elevation", "ah_star", "dec_star", "prev_ha", "prev_dec"]]
         Y = dataframe[["err_ah", "err_dec"]]
-
         # Apply noise to original dataset
         noisy_df = add_noise(dataframe)
 
         # Concatenate original and noisy data
         augmented_df = pd.concat([dataframe, noisy_df])
     
-
+        augmented_df.loc[:, "ah_star"] = augmented_df["ah_star"] * 15
+        augmented_df.loc[:, "prev_ha"] = augmented_df["prev_ha"] * 15
         # Feature engineering: create new columns
         augmented_df.loc[:, "dist_ha"] = augmented_df["ah_star"] - augmented_df["prev_ha"]
         augmented_df.loc[:, "dist_dec"] = augmented_df["dec_star"] - augmented_df["prev_dec"]
         augmented_df.loc[:, "pier_side"] = augmented_df["ah_star"] > 0
 
-        # Return augmented features (X) and target (Y)
-        augmented_X = augmented_df[["azimuth", "elevation", "ah_star", "dec_star", "prev_ha", "prev_dec", "dist_ha", "dist_dec", "pier_side"]]
+        # Trigonometric transformations
+        augmented_df['azimuth_sin'] = np.sin(np.radians(augmented_df['azimuth']))
+        augmented_df['azimuth_cos'] = np.cos(np.radians(augmented_df['azimuth']))
+
+        augmented_df['elevation_sin'] = np.sin(np.radians(augmented_df['elevation']))
+        augmented_df['elevation_cos'] = np.cos(np.radians(augmented_df['elevation']))
+
+        augmented_df['ah_star_sin'] = np.sin(np.radians(augmented_df['ah_star']))
+        augmented_df['ah_star_cos'] = np.cos(np.radians(augmented_df['ah_star']))
+
+        augmented_df['dec_star_sin'] = np.sin(np.radians(augmented_df['dec_star']))
+        augmented_df['dec_star_cos'] = np.cos(np.radians(augmented_df['dec_star']))
+
+        augmented_df['prev_ha_sin'] = np.sin(np.radians(augmented_df['prev_ha']))
+        augmented_df['prev_ha_cos'] = np.cos(np.radians(augmented_df['prev_ha']))
+
+        augmented_df['prev_dec_sin'] = np.sin(np.radians(augmented_df['prev_dec']))
+        augmented_df['prev_dec_cos'] = np.cos(np.radians(augmented_df['prev_dec']))
+
+        # Select augmented features (X) and target (Y)
+        augmented_X = augmented_df[["azimuth", "elevation", "ah_star", "dec_star", 
+                                    "dist_ha", "dist_dec", "pier_side",
+                                    "azimuth_sin", "azimuth_cos",
+                                    "elevation_sin", "elevation_cos",
+                                    "ah_star_sin", "ah_star_cos",
+                                    "dec_star_sin", "dec_star_cos",
+                                    "prev_ha_sin", "prev_ha_cos",
+                                    "prev_dec_sin", "prev_dec_cos"]]
+        
         augmented_Y = augmented_df[["err_ah", "err_dec"]]
 
         return augmented_X, augmented_Y
@@ -300,6 +328,11 @@ class CSVHandler():
         df = pd.DataFrame.from_dict(data=d)
         df.to_csv((RNA_CSV_PATH), mode='a', index=False, header=False)
 
+def select_features(X, y):
+    selector = SelectKBest(score_func=f_regression, k='all')
+    X_selected = selector.fit_transform(X, y)
+    return X_selected
+
 class RandomForest():    
     @staticmethod
     def train():
@@ -312,7 +345,6 @@ class RandomForest():
 
         """       
         X, Y = CSVHandler.read_data()      
-
         X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
         scaler_X = MinMaxScaler()
@@ -344,38 +376,23 @@ class RandomForest():
         # Compile the model
         model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['acc', 'mse'])
         
-        # model.save(RNA_MODEL_PATH)
+        model.save(RNA_MODEL_PATH)
 
         # Define a checkpoint callback to save the best model during training
         checkpoint_callback = keras.callbacks.ModelCheckpoint(RNA_MODEL_PATH, save_best_only=True)
         early_stopping_callback = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
 
         epochs = 600
-        batch = 20
-
-       # KerasRegressor for cross-validation
-        keras_model = KerasRegressor(model=model, epochs=epochs, batch_size=batch, metrics=['acc', 'mse'], loss='mean_squared_error',
-                                    optimizer=keras.optimizers.Adam(learning_rate=0.001),
-                                    callbacks=[checkpoint_callback, early_stopping_callback])
-
-        # Perform cross-validation
-        scores = cross_val_score(keras_model, X_train_scaled, Y_train_scaled, cv=5)
+        batch = 50
 
         # Train the model on the entire training set
-        history = keras_model.fit(X_train_scaled, Y_train_scaled, 
+        history = model.fit(X_train_scaled, Y_train_scaled, 
                                 validation_data=(X_test_scaled, Y_test_scaled),
                                 epochs=epochs, batch_size=batch, 
                                 callbacks=[checkpoint_callback, early_stopping_callback])
 
-        history.model.save(RNA_MODEL_PATH)
-        print(history)
-        
-        # Evaluate the model on the training and test sets
-        train_loss = keras_model.score(X_train_scaled, Y_train_scaled)
-        test_loss = keras_model.score(X_test_scaled, Y_test_scaled)
-
         # Predictions and metrics
-        Y_pred_scaled = keras_model.predict(X_test_scaled)
+        Y_pred_scaled = model.predict(X_test_scaled)
         mae = mean_absolute_error(Y_test_scaled, Y_pred_scaled)
         mse = mean_squared_error(Y_test_scaled, Y_pred_scaled)
         r2 = r2_score(Y_test_scaled, Y_pred_scaled)
@@ -383,30 +400,28 @@ class RandomForest():
         result[f"RESULT"] = {
             "MAE": mae,
             "MSE": mse,
-            "R2": r2,
-            "Cross": scores,
-            "MeanCross": np.mean(scores)
+            "R2": r2
             }
 
         print(result)
 
-        # # Plot training history
-        # plt.plot(history.history['loss'], label='Training Loss')
-        # plt.plot(history.history['val_loss'], label='Validation Loss')
-        # plt.xlabel('Epochs')
-        # plt.ylabel('Loss')
-        # plt.legend()
-        # plt.show()
+        # Plot training history
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.show()
 
-        # plt.plot(history.history['acc'], label = 'acc')
-        # plt.plot(history.history['val_acc'], label='val acc')
-        # plt.title("acc vs Val_acc")
-        # plt.xlabel("Epochs")
-        # plt.ylabel("acc")
-        # plt.legend()
-        # plt.show()
+        plt.plot(history.history['acc'], label = 'acc')
+        plt.plot(history.history['val_acc'], label='val acc')
+        plt.title("acc vs Val_acc")
+        plt.xlabel("Epochs")
+        plt.ylabel("acc")
+        plt.legend()
+        plt.show()
 
-        return round(np.mean(scores), 2)
+        return 
     
     @staticmethod
     def make_predict(ha=None, dec=None, temp=None, latitude=None, prev_ha=None, prev_dec=None):
@@ -437,9 +452,33 @@ class RandomForest():
         dist_ha = ha - prev_ha
         dist_dec = dec - prev_dec
         pier_side = ha > 0
+        azimuth_sin = np.sin(np.radians(az))
+        azimuth_cos = np.cos(np.radians(az))
+
+        elevation_sin = np.sin(np.radians(elevation))
+        elevation_cos = np.cos(np.radians(elevation))
+
+        ah_star_sin = np.sin(np.radians(ha * 15))
+        ah_star_cos = np.cos(np.radians(ha * 15))
+
+        dec_star_sin = np.sin(np.radians(dec))
+        dec_star_cos = np.cos(np.radians(dec))
+
+        prev_ha_sin = np.sin(np.radians(prev_ha * 15))
+        prev_ha_cos = np.cos(np.radians(prev_ha * 15))
+
+        prev_dec_sin = np.sin(np.radians(prev_dec))
+        prev_dec_cos = np.cos(np.radians(prev_dec))
       
 
-        X_futuro = np.array([[az, elevation, ha, dec, prev_ha, prev_dec, dist_ha, dist_dec, pier_side]])
+        X_futuro = np.array([[az, elevation, ha * 15, dec, 
+                                    dist_ha, dist_dec, pier_side,
+                                    azimuth_sin, azimuth_cos,
+                                    elevation_sin, elevation_cos,
+                                    ah_star_sin, ah_star_cos,
+                                    dec_star_sin, dec_star_cos,
+                                    prev_ha_sin, prev_ha_cos,
+                                    prev_dec_sin, prev_dec_cos]])
         X_futuro_scaled = scaler_X.transform(X_futuro)
 
         Y_rna_prever_futuro_scaled = model.predict(X_futuro_scaled)
@@ -456,9 +495,6 @@ class RandomForest():
           
 
 RandomForest.train()
-RandomForest.make_predict(ha=hms_to_hours("03:34:25.42"), dec=dms_to_degrees("-8 45 56"), temp=18, 
+RandomForest.make_predict(ha=(hms_to_hours("13:44:09.70")-hms_to_hours("9 28 46.54")), dec=dms_to_degrees("-8 45 56"), temp=18, 
                           latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("02:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
 
-
-# "03:49:18.41"
-# "-40:13:25.87"
