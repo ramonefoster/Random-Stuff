@@ -9,7 +9,7 @@ def create_mp4(image_folder, output_mp4, fps=30):
     filenames = sorted(os.listdir(image_folder))
     
     for filename in filenames:
-        if filename.endswith(".png") or filename.endswith(".jpg"):  # Adjust file extensions as needed
+        if filename.lower().endswith(".png") or filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg"):  # Adjust file extensions as needed
             img_path = os.path.join(image_folder, filename)
             images.append(imageio.imread(img_path))
 
