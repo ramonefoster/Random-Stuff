@@ -337,7 +337,7 @@ class RandomForest():
         #BEST
         model = keras.Sequential()
         model.add(keras.Input(shape=(X_train.shape[1],)))
-        model.add(layers.Dense(250, activation='tanh'))
+        model.add(layers.Dense(50, activation='tanh'))
         model.add(layers.Dropout(0.2))
         model.add(layers.Dense(8, activation='tanh'))
         model.add(layers.Dense(2)) 
@@ -390,21 +390,6 @@ class RandomForest():
 
         print(result)
 
-        # # Plot training history
-        # plt.plot(history.history['loss'], label='Training Loss')
-        # plt.plot(history.history['val_loss'], label='Validation Loss')
-        # plt.xlabel('Epochs')
-        # plt.ylabel('Loss')
-        # plt.legend()
-        # plt.show()
-
-        # plt.plot(history.history['acc'], label = 'acc')
-        # plt.plot(history.history['val_acc'], label='val acc')
-        # plt.title("acc vs Val_acc")
-        # plt.xlabel("Epochs")
-        # plt.ylabel("acc")
-        # plt.legend()
-        # plt.show()
 
         return round(np.mean(scores), 2)
     
@@ -432,7 +417,7 @@ class RandomForest():
         scaler_X = scalers['scaler_X']
         scaler_Y = scalers['scaler_Y']
 
-        az, elevation = get_elevation_azimuth(ha, dec, latitude)
+        elevation, az = get_elevation_azimuth(ha, dec, latitude)
 
         dist_ha = ha - prev_ha
         dist_dec = dec - prev_dec
@@ -455,10 +440,19 @@ class RandomForest():
         return (new_ha, new_dec)
           
 
-RandomForest.train()
-RandomForest.make_predict(ha=hms_to_hours("03:34:25.42"), dec=dms_to_degrees("-8 45 56"), temp=18, 
-                          latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("02:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
+score = RandomForest.train()
+print("TRAIN RESULT", score)
+# RandomForest.make_predict(ha=hms_to_hours("00:30:00.42"), dec=dms_to_degrees("-11 17 22.7"), temp=18, 
+#                           latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("-01:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
 
+RandomForest.make_predict(ha=1.2967064500685144, dec=-60.94322222222222, temp=18, 
+                          latitude=dms_to_degrees("-22 32 04"), prev_ha=0.37513611111111106, prev_dec=-28.476599999999998)
 
-# "03:49:18.41"
-# "-40:13:25.87"
+print("RESULT", hours_to_hms(1.3385039018773313), degrees_to_dms(-61.17208556757857))
+
+# 22/Jun/2024 21:48:33: [SLEW] HA: 2.440120260728941, DEC: -11.289638888888888, PREVHA: -1.9762611111111112, PREVDEC: 0.42139166666666666 
+# | MLHA: 2.4696396041546826, ML_DEC: -11.472554450573316
+
+# 22/Jun/2024 21:54:57: [SLEW] HA: 1.2967064500685144, DEC: -60.94322222222222, PREVHA: 0.37513611111111106, PREVDEC: -28.476599999999998 
+# | MLHA: 1.3385039018773313, ML_DEC: -61.17208556757857
+

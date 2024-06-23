@@ -12,10 +12,10 @@ import joblib
 
 from utils.utilities import check_exists, get_elevation_azimuth, hms_to_hours, hours_to_hms, degrees_to_dms, dms_to_degrees, add_noise
 
-RNA_CSV_PATH = 'data/dataset.csv'
-RNA_TRAINTEST_PATH = 'RFdata/rf_train_test.pkl'
-RNA_SCALER_PATH = 'RFdata/rf_scaler_test.pkl'
-RNA_MODEL_PATH = 'RFdata/rf_model.pkl'
+RNA_CSV_PATH = 't40_data/dataset.csv'
+RNA_TRAINTEST_PATH = 't40_data/rf_train_test.pkl'
+RNA_SCALER_PATH = 't40_data/rf_scaler_test.pkl'
+RNA_MODEL_PATH = 't40_data/rf_model.pkl'
 
 class CSVHandler():
     @staticmethod
@@ -167,8 +167,8 @@ class RandomForest():
         # (max_depth=12, max_features='log2', max_leaf_nodes=12, n_estimators=25)
         # (max_depth=12, max_features='sqrt', max_leaf_nodes=12, n_estimators=50)
         # (max_depth=9, max_features='sqrt', max_leaf_nodes=9, n_estimators=50)
-        rf_regressor = RandomForestRegressor(max_depth=9, max_features=None, max_leaf_nodes=9,
-                      n_estimators=25, random_state=42)
+        rf_regressor = RandomForestRegressor(max_depth=6, max_features='sqrt', max_leaf_nodes=9,
+                      n_estimators=50)
 
         rf_regressor.fit(X_train_scaled, Y_train_scaled)
         joblib.dump(rf_regressor, RNA_MODEL_PATH)
@@ -199,7 +199,7 @@ class RandomForest():
         scaler_X = scalers['scaler_X']
         scaler_Y = scalers['scaler_Y']
 
-        az, elevation = get_elevation_azimuth(ha, dec, latitude)
+        elevation, az = get_elevation_azimuth(ha, dec, latitude)
 
         dist_ha = ha - prev_ha
         dist_dec = dec - prev_dec
@@ -298,11 +298,11 @@ class RandomForest():
         return best_rf
 
 # print(RandomForest.tunning_hp())
-print("SCORE: ", RandomForest.train())
-RandomForest.make_predict(ha=hms_to_hours("04:16:12.00"), dec=dms_to_degrees("-8 45 56"), temp=18, 
-                          latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("02:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
+# print("SCORE: ", RandomForest.train())
+# RandomForest.make_predict(ha=hms_to_hours("00:30:00.42"), dec=dms_to_degrees("-11 17 22.7"), temp=18, 
+#                           latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("-01:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
 
-# standard
-# 04:17:05.00 -08:49:29.22
-# Cross-Validation MSE Scores: [0.00478702 0.00279261 0.00320972 0.01248987 0.00272018]
-# Mean Cross-Validation MSE: 0.005199881435364554
+RandomForest.make_predict(ha=1.2967064500685144, dec=-60.94322222222222, temp=18, 
+                          latitude=dms_to_degrees("-22 32 04"), prev_ha=0.37513611111111106, prev_dec=-28.476599999999998)
+
+print("RESULT", hours_to_hms(1.3385039018773313), degrees_to_dms(-61.17208556757857))
