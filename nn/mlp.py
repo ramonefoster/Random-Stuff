@@ -323,7 +323,7 @@ class RandomForest():
         return best_mlp 
 
 # print(RandomForest.tunning_hp())
-# print("SCORE: ", RandomForest.train())
+print("SCORE: ", RandomForest.train())
 # RandomForest.make_predict(ha=hms_to_hours("00:30:00.42"), dec=dms_to_degrees("-11 17 22.7"), temp=18, 
 #                           latitude=dms_to_degrees("-22 32 04"), prev_ha=hms_to_hours("-01:21:46.67"), prev_dec=dms_to_degrees("+09 53 32"))
 

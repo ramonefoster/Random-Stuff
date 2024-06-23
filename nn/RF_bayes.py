@@ -1,6 +1,5 @@
 import pandas as pd
 import csv
-from pathlib import Path
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, cross_val_score
@@ -10,6 +9,7 @@ import numpy as np
 import pickle
 import joblib
 from bayes_opt import BayesianOptimization
+
 from utils.utilities import check_exists, get_elevation_azimuth, hms_to_hours, hours_to_hms, degrees_to_dms, dms_to_degrees, add_noise
 
 RNA_CSV_PATH = 't40_data/dataset.csv'
@@ -130,7 +130,7 @@ class CSVHandler():
 
 class RandomForest():
     @staticmethod
-    def train():
+    def train(best_params = None):
         """
         Perform training of the neural network and save the generated model to a pickle file.
 
@@ -162,10 +162,12 @@ class RandomForest():
 
         with open(RNA_TRAINTEST_PATH, mode='wb') as f:
             pickle.dump([X_train_scaled, X_test_scaled, Y_train_scaled, Y_test_scaled], f)
-
-        rf_regressor = RandomForestRegressor(max_depth=14, max_features=0.4939908863096728,
-                      max_leaf_nodes=14, random_state=42)
-
+        
+        if best_params:
+            rf_regressor = RandomForestRegressor(**best_params)
+        else:
+            rf_regressor = RandomForestRegressor(max_depth=113, max_features=0.65,
+                                    max_leaf_nodes=119, n_estimators=41, random_state=42)
         rf_regressor.fit(X_train_scaled, Y_train_scaled)
         joblib.dump(rf_regressor, RNA_MODEL_PATH)
         score = rf_regressor.score(X_train_scaled, Y_train_scaled)
@@ -275,9 +277,9 @@ class RandomForest():
 
         param_bounds = {
             'n_estimators': (5, 150),
-            'max_features': (0.1, 0.9),  # We will use float representation for Bayesian Optimization
-            'max_depth': (3, 15),
-            'max_leaf_nodes': (3, 15)
+            'max_features': (0.1, 0.9),  
+            'max_depth': (3, 200),
+            'max_leaf_nodes': (3, 200)
         }
 
         scalers = joblib.load(RNA_SCALER_PATH)
@@ -292,7 +294,7 @@ class RandomForest():
             random_state=42,
             verbose=2
         )
-        optimizer.maximize(init_points=5, n_iter=25)
+        optimizer.maximize(init_points=5, n_iter=50)
 
         best_params = optimizer.max['params']
         best_params['n_estimators'] = int(best_params['n_estimators'])
@@ -306,10 +308,9 @@ class RandomForest():
 
         joblib.dump(best_rf, RNA_MODEL_PATH)
 
-        return best_params, best_rf
+        return best_params
 
-print(RandomForest.tunning_hp())
-print("SCORE: ", RandomForest.train())
+print("SCORE: ", RandomForest.train(RandomForest.tunning_hp()))
 
 RandomForest.make_predict(ha=1.2967064500685144, dec=-60.94322222222222, temp=18, 
                           latitude=dms_to_degrees("-22 32 04"), prev_ha=0.37513611111111106, prev_dec=-28.476599999999998)
